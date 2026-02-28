@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>背词大师v0</title>
+    
+    <style>
+        :root {
+            --primary: #4f46e5; --primary-light: #e0e7ff; --primary-dark: #4338ca;
+            --bg-body: #f8fafc; --bg-card: #ffffff;
+            --text-main: #0f172a; --text-sub: #64748b;
+            --danger: #ef4444; --success: #22c55e; --warning: #f59e0b;
+            --nav-height: 64px;
+            --radius-xl: 16px; --radius-2xl: 24px;
+            --shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            margin: 0; padding: 0; height: 100vh; width: 100vw; overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg-body); color: var(--text-main);
+            display: flex; flex-direction: column;
+        }
+
+        .app-container { flex: 1; position: relative; overflow: hidden; display: flex; flex-direction: column; }
+        
+        .page {
+            position: absolute; inset: 0; background: var(--bg-body); 
+            display: flex; flex-direction: column; opacity: 0; pointer-events: none;
+            transition: opacity 0.2s; z-index: 10;
+            padding-bottom: var(--nav-height); 
+        }
+        .page.active { opacity: 1; pointer-events: auto; z-index: 20; }
+        
+        .sub-page {
+            position: absolute; inset: 0; background: var(--bg-body);
+            transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1000; padding-bottom: 0; display: flex; flex-direction: column;
+        }
+        .sub-page.active { transform: translateY(0); }
+
+        .scroll-area { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 1.5rem; -webkit-overflow-scrolling: touch; }
+
+        .bottom-nav {
+            height: var(--nav-height); background: rgba(255,255,255,0.95); backdrop-filter: blur(10px);
+            border-top: 1px solid #e2e8f0; display: flex; justify-content: space-around; align-items: center;
+            z-index: 500; position: absolute; bottom: 0; width: 100%; transition: transform 0.3s;
+        }
+        .nav-item {
+            flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: #94a3b8; font-size: 0.75rem; cursor: pointer; height: 100%; gap: 4px;
+        }
+        .nav-item svg { width: 24px; height: 24px; stroke: currentColor; stroke-width: 2; fill: none; }
+        .nav-item.active { color: var(--primary); font-weight: 700; }
+        .bottom-nav.hidden { transform: translateY(100%); } 
+
+        .header {
+            height: 60px; padding: 0 1.5rem; display: flex; justify-content: space-between; align-items: center;
+            background: rgba(255,255,255,0.8); backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 40;
+            border-bottom: 1px solid rgba(0,0,0,0.05); flex-shrink: 0;
+        }
+        .header-title { font-size: 1.25rem; font-weight: 800; color: var(--text-main); }
+        .icon-btn { background: none; border: none; padding: 0.5rem; cursor: pointer; color: var(--text-main); font-size: 1.2rem; display:flex; align-items:center; justify-content:center; }
+
+        .card { background: white; border-radius: var(--radius-xl); padding: 1.25rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 1rem; border: 1px solid #f1f5f9; }
+        
+        .stats-gradient {
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); color: white;
+            border-radius: var(--radius-2xl); padding: 2rem; box-shadow: var(--shadow);
+            margin-bottom: 2rem; position: relative; overflow: hidden;
+        }
+
+        .btn {
+            width: 100%; background: var(--primary); color: white; font-weight: bold; font-size: 1rem;
+            padding: 1rem; border-radius: var(--radius-xl); border: none; cursor: pointer;
+            box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3); transition: transform 0.1s, opacity 0.2s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .btn:active { transform: scale(0.98); opacity: 0.9; }
+        .btn-ghost { background: #f1f5f9; color: var(--text-main); box-shadow: none; }
+        .btn-danger { background: #fee2e2; color: var(--danger); box-shadow: none; }
+        .btn-warning { background: #fff7ed; color: #d97706; box-shadow: none; }
+        .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.85rem; width: auto; border-radius: 8px; }
+
+        .list-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 1rem; border-bottom: 1px solid #f1f5f9; background: white;
+            transition: background 0.2s;
+        }
+        .list-item:active { background: #f8fafc; }
+        .list-item:first-child { border-top-left-radius: var(--radius-xl); border-top-right-radius: var(--radius-xl); }
+        .list-item:last-child { border-bottom-left-radius: var(--radius-xl); border-bottom-right-radius: var(--radius-xl); border-bottom: none; }
+
+        .badge { padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.75rem; font-weight: bold; background: #f1f5f9; color: var(--text-sub); }
+        .badge.err { background: #fef2f2; color: var(--danger); }
+        .badge.ok { background: #f0fdf4; color: var(--success); }
+
+        .select-box {
+            width: 100%; padding: 1rem; border: 1px solid #e2e8f0; border-radius: var(--radius-xl);
+            background: white; font-size: 1rem; font-weight: bold; color: var(--text-main);
+            outline: none; margin-bottom: 0.5rem; appearance: none;
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23007CB2%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+            background-repeat: no-repeat; background-position: right 1rem center; background-size: 0.65rem auto;
+        }
+
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 2000;
+            display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);
+        }
+        .modal {
+            background: white; width: 85%; max-width: 360px; padding: 1.5rem;
+            border-radius: var(--radius-2xl); box-shadow: var(--shadow);
+            animation: popIn 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+        }
+        @keyframes popIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        .inp {
+            width: 100%; padding: 0.8rem 1rem; border: 2px solid #e2e8f0; border-radius: 12px;
+            font-size: 1rem; outline: none; margin-bottom: 1rem; transition: border-color 0.2s;
+            background: #f8fafc;
+        }
+        .inp:focus { border-color: var(--primary); background: white; }
+
+        .flash-card {
+            background: white; border-radius: var(--radius-2xl); box-shadow: var(--shadow);
+            margin: 1rem; padding: 2rem; flex: 1; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; text-align: center; position: relative;
+        }
+        .word-title { 
+            font-size: 3rem; font-weight: 900; margin-bottom: 1rem; color: var(--text-main); 
+            line-height: 1.1; word-break: break-word;
+        }
+        .progress-bar { position: absolute; top: 0; left: 0; right: 0; height: 6px; background: #e2e8f0; border-radius: 24px 24px 0 0; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--primary); width: 0%; transition: width 0.3s; }
+        
+        .tag-group { display: flex; flex-wrap: wrap; gap: 0.8rem; margin: 1rem 0; }
+        .tag-opt {
+            padding: 0.6rem 1.2rem; border: 1px solid #e2e8f0; border-radius: 99px;
+            font-size: 0.9rem; font-weight: 600; color: var(--text-sub); cursor: pointer;
+            background: white; transition: 0.2s;
+        }
+        .tag-opt.selected { background: var(--primary); color: white; border-color: var(--primary); box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3); }
+
+        .hidden { display: none !important; }
+        
+        .prompt-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem; font-size: 0.85rem; color: var(--text-sub); }
+        .alert-text { color: var(--danger); font-size: 0.8rem; margin-top: 0.5rem; display: flex; gap: 4px; align-items: center; }
+
+        .toast {
+            position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); color: white; padding: 10px 20px;
+            border-radius: 50px; font-size: 0.9rem; z-index: 3000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); pointer-events: none;
+            animation: fadeInOut 2s ease-in-out forwards;
+        }
+        @keyframes fadeInOut { 0% { opacity: 0; transform: translate(-50%, 10px); } 10% { opacity: 1; transform: translate(-50%, 0); } 80% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -10px); } }
+
+        /* 顶部切换开关 */
+        .toggle-header { display: flex; gap: 1rem; justify-content: center; width: 100%; }
+        .toggle-btn { opacity: 0.5; font-size: 1rem; font-weight: bold; border-bottom: 3px solid transparent; padding: 0 0.5rem 0.5rem 0.5rem; transition: 0.2s; }
+        .toggle-btn.active { opacity: 1; color: var(--primary); border-bottom-color: var(--primary); }
+    </style>
+</head>
+<body>
+
+<div id="toast-container"></div>
+
+<div class="app-container">
+    
+    <div id="tab-home" class="page active">
+        <div class="header">
+            <div class="header-title">📚 背词大师v0</div>
+        </div>
+        <div class="scroll-area">
+            <div class="stats-gradient">
+                <div style="font-size: 0.9rem; opacity: 0.9; margin-bottom: 0.5rem;">当前词库总数</div>
+                <div style="font-size: 3.5rem; font-weight: 800; line-height: 1;" id="dash-total">0</div>
+                <div style="display: flex; gap: 2rem; margin-top: 2rem;">
+                    <div>
+                        <div style="font-size: 0.8rem; opacity: 0.8;">已掌握</div>
+                        <div style="font-size: 1.5rem; font-weight: bold;" id="dash-ok">0</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.8rem; opacity: 0.8;">简单词 (不背)</div>
+                        <div style="font-size: 1.5rem; font-weight: bold;" id="dash-simple">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn" style="padding: 1.2rem; font-size: 1.2rem;" onclick="setupApp.open()">
+                🚀 开始学习
+            </button>
+
+            <div style="margin-top: 2rem;">
+                <h3 style="font-size: 1rem; color: var(--text-sub); margin-bottom: 1rem;">最近 20 次练习</h3>
+                <div id="history-list" style="background: white; border-radius: var(--radius-xl); overflow: hidden; border: 1px solid #f1f5f9;">
+                    </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="tab-mistakes" class="page">
+        <div class="header">
+            <div class="toggle-header">
+                <div id="tgl-mistake" class="toggle-btn active" onclick="mistakeApp.switchView('mistake')">错题本</div>
+                <div id="tgl-simple" class="toggle-btn" onclick="mistakeApp.switchView('simple')">简单词本</div>
+            </div>
+        </div>
+        <div class="scroll-area" id="mistake-list">
+            </div>
+    </div>
+
+    <div id="tab-import" class="page">
+        <div class="header">
+            <div class="header-title">📂 导入与管理</div>
+        </div>
+        <div class="scroll-area">
+            <div style="margin-bottom: 2rem;">
+                <h3 style="margin-bottom: 1rem; color: var(--text-sub); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px;">1. 选择导入目标分区</h3>
+                <select id="import-deck-select" class="select-box" onchange="importApp.updateCount()">
+                    </select>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; padding: 0 0.5rem;">
+                    <span style="font-size: 0.85rem; color: #94a3b8;">当前分区词数: <strong id="import-deck-count" style="color: var(--primary);">0</strong></span>
+                    <button class="btn btn-sm btn-ghost" style="color:var(--primary);" onclick="deckApp.createDeckUI()">+ 新建分区</button>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 2rem;">
+                <h3 style="margin-bottom: 1rem; color: var(--text-sub); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px;">2. 智能文本导入 (推荐)</h3>
+                
+                <div class="prompt-box">
+                    <div style="font-weight:bold; margin-bottom:0.5rem; color:var(--text-main);">步骤 1：复制提示词给 豆包</div>
+                    <div style="line-height: 1.5; color:var(--danger); font-weight:bold;">⚠️ 必须使用 豆包！</div>
+                    <div style="line-height: 1.5; font-size: 0.8rem; margin-bottom: 0.5rem;">其他 AI（如 ChatGPT、文心一言）可能会导致格式错误。</div>
+                    <button class="btn btn-sm" style="width:100%; margin-top:0.5rem; background:#6366f1;" onclick="importApp.copyPrompt()">📋 复制标准化提示词</button>
+                </div>
+
+                <div class="card" style="border: 2px dashed #cbd5e1; box-shadow: none;">
+                    <div style="font-weight:bold; margin-bottom:0.5rem; color:var(--text-main); font-size: 0.85rem;">步骤 2：粘贴 AI 清洗后的结果</div>
+                    <textarea id="paste-area" class="inp" style="height:200px; font-family:monospace; font-size:0.85rem; margin-bottom:1rem; border:1px solid #e2e8f0;" placeholder="粘贴示例:&#10;abandon:::v. 放弃:::He abandoned the car."></textarea>
+                    <button class="btn" onclick="importApp.handlePaste()">📥 确认导入</button>
+                </div>
+            </div>
+
+            <div>
+                <h3 style="margin-bottom: 1rem; color: var(--text-sub); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px;">所有分区管理</h3>
+                <div id="deck-list-manage" style="background: white; border-radius: var(--radius-xl); overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #f1f5f9;">
+                    </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bottom-nav">
+        <div class="nav-item active" onclick="router.switchTab('tab-home')">
+            <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+            <span>背单词</span>
+        </div>
+        <div class="nav-item" onclick="router.switchTab('tab-mistakes')">
+            <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            <span>错题/简单</span>
+        </div>
+        <div class="nav-item" onclick="router.switchTab('tab-import')">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            <span>导入</span>
+        </div>
+    </div>
+
+    <div id="pg-deck" class="sub-page">
+        <div class="header">
+            <button class="icon-btn" onclick="router.back()">←</button>
+            <div class="header-title" id="deck-title-txt">Default</div>
+            <div style="display: flex; gap: 0.5rem;">
+                <button class="icon-btn" style="font-size: 0.8rem; font-weight:bold; color:var(--danger);" onclick="deckApp.undoLastImport()">↺ 撤销导入</button>
+                <button class="icon-btn" style="font-size: 0.9rem; font-weight:bold; color:var(--primary);" onclick="deckApp.exportDeck()">📤 导出</button>
+            </div>
+        </div>
+        <div class="scroll-area">
+            <div style="padding-bottom: 0.5rem; font-weight: bold; color: var(--text-sub); display: flex; justify-content: space-between;">
+                <span>单词列表</span>
+                <span id="deck-word-count-detail">0 词</span>
+            </div>
+            <div id="word-list" style="background: white; border-radius: var(--radius-xl); box-shadow: var(--shadow); overflow: hidden;"></div>
+        </div>
+    </div>
+
+    <div id="pg-setup" class="sub-page">
+        <div class="header">
+            <button class="icon-btn" onclick="router.back()">✕</button>
+            <div class="header-title">学习计划</div>
+            <div style="width: 32px;"></div>
+        </div>
+        <div class="scroll-area">
+            <div style="margin-bottom: 2rem;">
+                <h3 style="margin-bottom: 1rem;">1. 选择词书 (Deck)</h3>
+                <div id="setup-decks" class="tag-group"></div>
+            </div>
+            <div style="margin-bottom: 2rem;">
+                <h3 style="margin-bottom: 1rem;">2. 学习数量</h3>
+                <div id="setup-limits" class="tag-group"></div>
+            </div>
+            <div style="margin-bottom: 2rem;">
+                <h3 style="margin-bottom: 1rem;">3. 学习模式</h3>
+                <div class="tag-group">
+                    <div class="tag-opt selected" onclick="setupApp.selectMode(this, 'random')">🎲 随机/新词</div>
+                    <div class="tag-opt" onclick="setupApp.selectMode(this, 'write')">✏️ 拼写测试</div>
+                </div>
+            </div>
+            <button class="btn" style="padding: 1.25rem; font-size: 1.1rem; margin-top: 2rem;" onclick="sessionApp.start()">开始挑战!</button>
+        </div>
+    </div>
+
+    <div id="pg-session" class="sub-page" style="z-index: 2000; background: #f1f5f9;">
+        <div class="header" style="background: transparent; border: none;">
+            <button class="icon-btn" onclick="sessionApp.quit()">✕</button>
+            <div style="color: var(--text-sub); font-weight: bold; font-family: monospace;">
+                <span id="sess-idx">1</span> / <span id="sess-total">20</span>
+            </div>
+            <div style="width: 32px;"></div>
+        </div>
+        
+        <div style="flex: 1; display: flex; flex-direction: column; padding: 1rem;">
+            <div id="card-recall" class="flash-card hidden">
+                <div class="progress-bar"><div class="progress-fill" id="sess-prog"></div></div>
+                <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; width: 100%;">
+                    <div id="rec-word" class="word-title">Word</div>
+                    <div style="color: var(--text-sub);">(点击发音)</div>
+                </div>
+                <div style="width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <button class="btn btn-danger" onclick="sessionApp.answer(false)">😣 不认识 (1)</button>
+                    <button class="btn" onclick="sessionApp.answer(true)">😎 认识 (2)</button>
+                </div>
+                <button class="btn btn-ghost" style="margin-top: 1rem; width: 100%; background: #e0e7ff; color: var(--primary);" onclick="sessionApp.markAsSimple()">⚡ 太简单 (不再背)</button>
+            </div>
+
+            <div id="card-spell" class="flash-card hidden">
+                <div class="progress-bar"><div class="progress-fill" id="sess-prog-spell"></div></div>
+                <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; width: 100%;">
+                    <div id="spell-def" style="font-size: 1.2rem; color: var(--text-sub); margin-bottom: 2rem; font-weight: bold;">Definition</div>
+                    <input id="spell-inp" class="inp" style="text-align: center; font-size: 1.5rem; font-weight: bold;" autocomplete="off">
+                    <div id="spell-msg" style="height: 20px; color: var(--danger); font-weight: bold;"></div>
+                </div>
+                <div style="width: 100%;">
+                    <button class="btn" onclick="sessionApp.checkSpell()">提交</button>
+                    <button class="btn btn-ghost" style="margin-top: 0.5rem;" onclick="sessionApp.checkSpell(true)">不知道</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="pg-detail" class="sub-page" style="z-index: 2100;">
+        <div class="header"><div class="header-title">单词详情</div></div>
+        <div class="scroll-area" style="text-align: center; padding-top: 2rem;">
+            <div id="det-tag" class="badge" style="display: inline-block; padding: 0.5rem 1rem; font-size: 1rem; margin-bottom: 1.5rem;">正确</div>
+            <h1 id="det-word" style="font-size: 3.5rem; font-weight: 900; color: var(--primary); margin: 0 0 1.5rem 0; line-height: 1;">Word</h1>
+            <div id="det-def" style="font-size: 1.25rem; color: var(--text-sub); line-height: 1.6; margin-bottom: 2rem;">Definition</div>
+            
+            <div id="det-example-box" class="card" style="text-align: left; background: #fff7ed; border: 1px solid #fed7aa; display:none; cursor:pointer;" onclick="sessionApp.speakExample()">
+                <div style="font-size: 0.75rem; font-weight: bold; color: #d97706; margin-bottom: 0.5rem;">例句 (点击朗读)</div>
+                <div id="det-example" style="font-size: 1rem; color: #78350f; font-style: italic;"></div>
+            </div>
+
+            <div class="card" style="text-align: left; background: #f8fafc; border: none;">
+                <div style="font-size: 0.75rem; font-weight: bold; color: #94a3b8; margin-bottom: 0.5rem; letter-spacing: 1px;">INFO</div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span>所属分区</span>
+                    <span id="det-deck" style="font-weight: bold;">Default</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>历史错误</span>
+                    <span id="det-errs" style="color: var(--danger); font-weight: bold;">0</span>
+                </div>
+            </div>
+
+            <button id="btn-next" class="btn" style="margin-top: 1rem;" onclick="sessionApp.next()">下一个 (Enter)</button>
+            <button id="btn-undo" class="btn btn-danger" style="margin-top: 1rem;" onclick="sessionApp.undoKnown()">
+                🙈 刚才看错了 (标为不认识)
+            </button>
+        </div>
+    </div>
+
+    <div id="pg-summary" class="sub-page" style="z-index: 2200;">
+        <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2rem; text-align: center;">
+            <div style="font-size: 5rem; margin-bottom: 1rem;">🎉</div>
+            <h2 style="font-size: 2rem; margin-bottom: 2rem;">练习完成!</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; width: 100%;">
+                <div class="card" style="margin: 0; text-align: center;">
+                    <div style="font-size: 2rem; font-weight: bold; color: var(--primary);" id="sum-total">0</div>
+                    <div style="font-size: 0.8rem; color: var(--text-sub);">学习总数</div>
+                </div>
+                <div class="card" style="margin: 0; text-align: center;">
+                    <div style="font-size: 2rem; font-weight: bold; color: var(--danger);" id="sum-err">0</div>
+                    <div style="font-size: 0.8rem; color: var(--text-sub);">错误数</div>
+                </div>
+            </div>
+            <button class="btn" style="margin-top: 3rem;" onclick="router.goHome()">返回首页</button>
+        </div>
+    </div>
+
+</div>
+
+<div id="modal-edit" class="modal-overlay hidden">
+    <div class="modal">
+        <h3 id="modal-title" style="margin-top: 0;">添加单词</h3>
+        <input id="edit-id" type="hidden">
+        <input id="edit-w" class="inp" placeholder="单词 (Word)">
+        <input id="edit-d" class="inp" placeholder="释义 (Definition)">
+        <div style="display: flex; gap: 1rem;">
+            <button class="btn btn-ghost" onclick="toggleModal('modal-edit', false)">取消</button>
+            <button class="btn" onclick="deckApp.saveWord()">保存</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-create-deck" class="modal-overlay hidden">
+    <div class="modal">
+        <h3 style="margin-top: 0;">新建分区</h3>
+        <input id="new-deck-name" class="inp" placeholder="分区名称" onkeyup="if(event.key==='Enter') deckApp.confirmCreateDeck()">
+        <div style="display: flex; gap: 1rem;">
+            <button class="btn btn-ghost" onclick="toggleModal('modal-create-deck', false)">取消</button>
+            <button class="btn" onclick="deckApp.confirmCreateDeck()">创建</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const ui = {
+    toast: (msg) => {
+        const div = document.createElement('div');
+        div.className = 'toast'; div.innerText = msg;
+        document.getElementById('toast-container').appendChild(div);
+        setTimeout(() => div.remove(), 2000);
+    }
+};
+
+const DB = {
+    key: 'vocab_v57_db', histKey: 'vocab_v57_hist', data: [], history: [],
+    init: () => {
+        const d = localStorage.getItem(DB.key); const h = localStorage.getItem(DB.histKey);
+        if(d) DB.data = JSON.parse(d); if(h) DB.history = JSON.parse(h);
+    },
+    save: () => {
+        localStorage.setItem(DB.key, JSON.stringify(DB.data));
+        localStorage.setItem(DB.histKey, JSON.stringify(DB.history));
+    },
+    getDecks: () => Array.from(new Set(DB.data.map(i => i.deck))),
+    getWordsByDeck: (deck) => DB.data.filter(i => i.deck === deck),
+    addWord: (word, def, deck, ex="") => {
+        DB.data.push({ id: Date.now()+Math.random(), w: word, d: def, deck: deck, errs: 0, simple: false, ex: ex, batchId: Date.now() });
+        DB.save();
+    },
+    updateWord: (id, w, d) => {
+        const item = DB.data.find(i => i.id == id);
+        if(item) { item.w = w; item.d = d; DB.save(); }
+    },
+    deleteWord: (id) => { DB.data = DB.data.filter(i => i.id !== id); DB.save(); },
+    deleteDeck: (deck) => { DB.data = DB.data.filter(i => i.deck !== deck); DB.save(); },
+    undoLastImport: (deck) => {
+        const deckWords = DB.data.filter(w => w.deck === deck);
+        if(deckWords.length === 0) return 0;
+        const lastBatchId = deckWords.reduce((max, w) => w.batchId > max ? w.batchId : max, 0);
+        if(!lastBatchId) return 0;
+        const count = DB.data.filter(w => w.deck === deck && w.batchId === lastBatchId).length;
+        DB.data = DB.data.filter(w => !(w.deck === deck && w.batchId === lastBatchId));
+        DB.save(); return count;
+    },
+    markSimple: (id, isSimple) => {
+        const w = DB.data.find(i => i.id === id);
+        if(w) { w.simple = isSimple; DB.save(); }
+    },
+    recordHistory: (data) => {
+        DB.history.unshift(data); if(DB.history.length > 20) DB.history.pop(); DB.save();
+    },
+    updateHistory: (idx, data) => { if(DB.history[idx]) { DB.history[idx] = { ...DB.history[idx], ...data }; DB.save(); } },
+    markError: (id) => { const w = DB.data.find(i => i.id === id); if(w) { w.errs = (w.errs||0) + 1; DB.save(); } },
+    getMistakes: () => DB.data.filter(i => (i.errs||0) > 0 && !i.simple),
+    getSimpleWords: () => DB.data.filter(i => i.simple === true)
+};
+
+const router = {
+    switchTab: (id) => {
+        document.querySelectorAll('.bottom-nav .nav-item').forEach(el => el.classList.remove('active'));
+        document.querySelector(`.bottom-nav .nav-item[onclick*="${id}"]`).classList.add('active');
+        document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        if(id === 'tab-home') homeApp.render();
+        if(id === 'tab-mistakes') mistakeApp.render();
+        if(id === 'tab-import') importApp.initView();
+    },
+    push: (id) => document.getElementById(id).classList.add('active'),
+    back: () => {
+        const actives = document.querySelectorAll('.sub-page.active');
+        if(actives.length > 0) actives[actives.length-1].classList.remove('active');
+        homeApp.render();
+        if(deckApp.currentDeck) deckApp.renderWords();
+        importApp.initView(); mistakeApp.render();
+    },
+    goHome: () => {
+        document.querySelectorAll('.sub-page').forEach(el => el.classList.remove('active'));
+        toggleNav(true); router.switchTab('tab-home');
+    }
+};
+
+const toggleModal = (id, show) => {
+    const el = document.getElementById(id);
+    if(show) { el.classList.remove('hidden'); const input = el.querySelector('input'); if(input) setTimeout(() => input.focus(), 100); } 
+    else { el.classList.add('hidden'); }
+};
+const toggleNav = (show) => document.querySelector('.bottom-nav').classList.toggle('hidden', !show);
+
+const homeApp = {
+    render: () => {
+        document.getElementById('dash-total').innerText = DB.data.length;
+        document.getElementById('dash-ok').innerText = DB.data.filter(i => i.errs === 0 && !i.simple).length;
+        document.getElementById('dash-simple').innerText = DB.getSimpleWords().length;
+        const list = document.getElementById('history-list');
+        list.innerHTML = DB.history.length === 0 ? '<div style="padding:1rem;text-align:center;color:#94a3b8;">暂无记录</div>' : 
+            DB.history.map((h, i) => `<div class="list-item" onclick="sessionApp.replay(${i})"><div><div style="font-weight:bold;">${new Date(h.date).toLocaleDateString()}</div><div style="font-size:0.8rem;color:#64748b;">${h.deck} • ${h.count}词</div></div><div class="badge ${h.err>0?'err':''}">${h.score}%</div></div>`).join('');
+    }
+};
+
+const mistakeApp = {
+    view: 'mistake',
+    switchView: (v) => {
+        mistakeApp.view = v;
+        document.getElementById('tgl-mistake').classList.toggle('active', v === 'mistake');
+        document.getElementById('tgl-simple').classList.toggle('active', v === 'simple');
+        mistakeApp.render();
+    },
+    render: () => {
+        const el = document.getElementById('mistake-list');
+        let words = [];
+        if (mistakeApp.view === 'mistake') { words = DB.getMistakes(); } else { words = DB.getSimpleWords(); }
+
+        if(words.length === 0) el.innerHTML = '<div style="padding:3rem;text-align:center;color:#94a3b8;">暂无内容</div>';
+        else {
+            const groups = {};
+            words.forEach(w => { if(!groups[w.deck]) groups[w.deck] = []; groups[w.deck].push(w); });
+            el.innerHTML = Object.keys(groups).map(d => `
+                <div class="card">
+                    <div style="padding-bottom:0.5rem;border-bottom:1px solid #f1f5f9;margin-bottom:0.5rem;font-weight:bold;display:flex;justify-content:space-between;align-items:center;">
+                        <span>${d}</span>
+                        ${mistakeApp.view === 'mistake' ? `<button class="btn btn-sm" onclick="sessionApp.start([${groups[d].map(w=>w.id)}])">复习此组</button>` : ''}
+                    </div>
+                    ${groups[d].map(w => {
+                        const cleanW = w.w.replace(/^\d+[\.\s]+/, '').split(/[\(\[<]/)[0].trim();
+                        return `<div class="list-item" style="padding:0.5rem 0; cursor:pointer;" onclick="mistakeApp.showDetail(${w.id})">
+                            <div style="flex:1;">
+                                <div style="font-weight:bold;">${cleanW}</div>
+                                <div style="font-size:0.8rem;color:#64748b;">${w.d}</div>
+                            </div>
+                            ${mistakeApp.view === 'simple' ? `<button class="btn btn-sm btn-warning" onclick="event.stopPropagation(); DB.markSimple(${w.id}, false); mistakeApp.render(); ui.toast('已移出简单本')">移除</button>` : `<div class="badge err">错 ${w.errs}</div>`}
+                        </div>`;
+                    }).join('')}
+                </div>`).join('');
+        }
+    },
+    showDetail: (id) => {
+        const w = DB.data.find(i => i.id === id);
+        if(!w) return;
+        sessionApp.detail(w, false, false, true); // true = View Mode
+    }
+};
+
+const importApp = {
+    selectedDeck: null,
+    initView: () => {
+        const decks = DB.getDecks();
+        const select = document.getElementById('import-deck-select');
+        let renderDecks = [...decks];
+        if (importApp.selectedDeck && !renderDecks.includes(importApp.selectedDeck) && importApp.selectedDeck.trim() !== '') { renderDecks.push(importApp.selectedDeck); }
+        if(renderDecks.length === 0) { select.innerHTML = '<option value="">暂无分区，请新建</option>'; } 
+        else {
+            select.innerHTML = renderDecks.map(d => `<option value="${d}">${d}</option>`).join('');
+            if(!importApp.selectedDeck) importApp.selectedDeck = renderDecks[0]; 
+            select.value = importApp.selectedDeck;
+        }
+        importApp.updateCount();
+        document.getElementById('deck-list-manage').innerHTML = decks.length === 0 ? 
+            '<div style="text-align:center;color:#94a3b8;padding:1rem;">无分区</div>' : 
+            decks.map(d => `<div class="card list-item" onclick="deckApp.open('${d}')"><div><div style="font-weight:bold;">${d}</div><div style="font-size:0.8rem;color:#64748b;">${DB.getWordsByDeck(d).length} 词</div></div><div>›</div></div>`).join('');
+    },
+    updateCount: () => {
+        const select = document.getElementById('import-deck-select');
+        const val = select.value;
+        importApp.selectedDeck = val;
+        const count = val ? DB.getWordsByDeck(val).length : 0;
+        document.getElementById('import-deck-count').innerText = count;
+    },
+    copyPrompt: () => {
+        const prompt = `你是一个一丝不苟的数据录入员。请将我发送的文本（可能包含乱码、双栏混排）整理为严格的词汇表。
+**要求**：仅限豆包使用。
+
+重要原则：
+1. 【绝对完整】：你必须提取输入文本中的**每一个**单词。如果有 100 个词，你必须输出 100 行。
+2. 【保留一切】：
+   - 保留**音标**。
+   - 保留**英文释义**。
+   - 保留**中文释义**（没有则翻译）。
+   - 保留**重复单词**。
+3. 【生成例句】：为每个单词生成一个简短的英文例句。
+4. 【重复处理】：**必须统计重复词**。如果一个单词在文中出现了多次：
+   - 保留所有出现记录，不要合并。
+   - 在重复出现的条目释义后面，加上标注：\`(重复: 第N次出现, 首次位置见序号X)\`。
+5. 【格式统一】：
+   - 格式：单词:::音标 英文释义 中文释义:::例句
+   - 示例：abandon:::/ə'bændən/  give up; v.放弃，遗弃:::He abandoned the car.
+6. 【纯净输出】：不要废话，不要表头。`;
+        navigator.clipboard.writeText(prompt).then(() => ui.toast("提示词已复制！请去AI处粘贴。"));
+    },
+    handlePaste: () => {
+        if(!importApp.selectedDeck) return alert("请先选择或新建一个分区！");
+        const text = document.getElementById('paste-area').value;
+        if(!text.trim()) return alert("请先粘贴内容");
+        const lines = text.split('\n');
+        let addedCount = 0;
+        lines.forEach(line => {
+            if(!line.includes(':::')) return; 
+            const parts = line.split(':::');
+            if(parts.length < 2) return;
+            let w = parts[0].trim();
+            let d = parts[1].trim(); 
+            let ex = parts.length > 2 ? parts[2].trim() : ""; 
+            if (w.includes('/') || w.includes('[')) {
+                const match = w.match(/(\/[^/]+\/|\[[^\]]+\])/);
+                if (match) { const phonetic = match[0]; w = w.replace(phonetic, '').trim(); if (!d.includes(phonetic)) d = phonetic + " " + d; }
+            }
+            if(w && d) { DB.addWord(w, d, importApp.selectedDeck, ex); addedCount++; }
+        });
+        if(addedCount > 0) { ui.toast(`成功导入 ${addedCount} 个单词！`); document.getElementById('paste-area').value = ''; importApp.initView(); } else { alert("未识别到有效格式。"); }
+    },
+    handleFile: async (inp) => { alert("请使用【智能文本导入】功能，复制文字到输入框。"); inp.value = ''; }
+};
+
+const deckApp = {
+    currentDeck: null,
+    createDeckUI: () => { document.getElementById('new-deck-name').value = ''; toggleModal('modal-create-deck', true); },
+    confirmCreateDeck: () => { const n = document.getElementById('new-deck-name').value.trim(); if(n) { importApp.selectedDeck = n; toggleModal('modal-create-deck', false); importApp.initView(); ui.toast("分区创建成功"); } },
+    createDeck: () => deckApp.createDeckUI(),
+    open: (name) => { deckApp.currentDeck = name; document.getElementById('deck-title-txt').innerText = name; deckApp.renderWords(); router.push('pg-deck'); },
+    renderWords: () => {
+        const words = DB.getWordsByDeck(deckApp.currentDeck);
+        document.getElementById('deck-word-count-detail').innerText = words.length + " 词";
+        document.getElementById('word-list').innerHTML = words.map(w => `
+            <div class="list-item">
+                <div style="flex:1;">
+                    <div style="font-weight:bold;">${w.w.replace(/^\d+[\.\s]+/, '').split(/[\(\[<]/)[0].trim()}</div>
+                    <div style="font-size:0.8rem;color:#64748b;">${w.d}</div>
+                </div>
+                <button class="icon-btn" onclick="event.stopPropagation(); deckApp.editUI(${w.id})">✎</button>
+                <button class="icon-btn" style="color:var(--danger);" onclick="event.stopPropagation(); deckApp.del(${w.id})">🗑</button>
+            </div>`).join('');
+    },
+    exportDeck: () => { const words = DB.getWordsByDeck(deckApp.currentDeck); if(words.length === 0) return alert("当前分区为空"); const text = words.map(w => `${w.w} ||| ${w.d} ||| ${w.ex || ''}`).join("\n"); const blob = new Blob([text], {type: "text/plain;charset=utf-8"}); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `背词大师_${deckApp.currentDeck}.txt`; document.body.appendChild(a); a.click(); document.body.removeChild(a); },
+    undoLastImport: () => { if(confirm("确定要撤销最近一次导入的单词吗？")) { const count = DB.undoLastImport(deckApp.currentDeck); if(count > 0) { ui.toast(`已撤销 ${count} 个单词`); deckApp.renderWords(); } else { ui.toast("没有可撤销的记录"); } } },
+    deleteDeck: () => { if(confirm("删除此分区?")) { DB.deleteDeck(deckApp.currentDeck); router.back(); } },
+    del: (id) => { if(confirm("删除单词?")) { DB.deleteWord(id); deckApp.renderWords(); } },
+    addWordUI: () => { document.getElementById('modal-title').innerText = "添加单词"; document.getElementById('edit-id').value = ""; document.getElementById('edit-w').value = ""; document.getElementById('edit-d').value = ""; toggleModal('modal-edit', true); },
+    editUI: (id) => { const w = DB.data.find(i => i.id === id); if(!w) return; document.getElementById('modal-title').innerText = "编辑单词"; document.getElementById('edit-id').value = w.id; document.getElementById('edit-w').value = w.w; document.getElementById('edit-d').value = w.d; toggleModal('modal-edit', true); },
+    saveWord: () => { const id = document.getElementById('edit-id').value; const w = document.getElementById('edit-w').value.trim(); const d = document.getElementById('edit-d').value.trim(); if(w && d) { if(id) DB.updateWord(parseFloat(id), w, d); else DB.addWord(w, d, deckApp.currentDeck || importApp.selectedDeck); toggleModal('modal-edit', false); if(deckApp.currentDeck) deckApp.renderWords(); importApp.initView(); } }
+};
+
+const setupApp = {
+    selectedDecks: new Set(), limit: 20, mode: 'random',
+    open: () => { const d = DB.getDecks(); document.getElementById('setup-decks').innerHTML = `<div class="tag-opt" onclick="setupApp.tgDeck(this, '__ALL__')">全部</div>` + d.map(x => `<div class="tag-opt" onclick="setupApp.tgDeck(this, '${x}')">${x}</div>`).join(''); setupApp.selectedDecks.clear(); document.getElementById('setup-limits').innerHTML = [20,30,40,50,60,70].map(n => `<div class="tag-opt ${n===20?'selected':''}" onclick="setupApp.selLim(this, ${n})">${n}</div>`).join('') + `<div class="tag-opt" onclick="setupApp.selLim(this, 'all')">所有</div> <input id="cust-lim" class="inp hidden" type="number" style="width:80px;margin:0;padding:0.4rem;" placeholder="数量">`; setupApp.limit = 20; router.push('pg-setup'); },
+    tgDeck: (el, v) => { if(v === '__ALL__') { const all = el.classList.contains('selected'); document.querySelectorAll('#setup-decks .tag-opt').forEach(t => t.classList.toggle('selected', !all)); setupApp.selectedDecks = !all ? new Set(['__ALL__']) : new Set(); } else { el.classList.toggle('selected'); if(setupApp.selectedDecks.has('__ALL__')) { setupApp.selectedDecks.clear(); document.querySelector('#setup-decks .tag-opt').classList.remove('selected'); } if(el.classList.contains('selected')) setupApp.selectedDecks.add(v); else setupApp.selectedDecks.delete(v); } },
+    selLim: (el, v) => { document.querySelectorAll('#setup-limits .tag-opt').forEach(t => t.classList.remove('selected')); el.classList.add('selected'); const inp = document.getElementById('cust-lim'); if(v === 'custom') { inp.classList.remove('hidden'); inp.focus(); setupApp.limit = 'custom'; } else { inp.classList.add('hidden'); setupApp.limit = v; } },
+    selectMode: (el, m) => { el.parentNode.querySelectorAll('.tag-opt').forEach(t => t.classList.remove('selected')); el.classList.add('selected'); setupApp.mode = m; }
+};
+
+const sessionApp = {
+    queue: [], mistakes: 0, total: 0, mode: 'random', hist: {}, replayIdx: null, isViewMode: false,
+    start: (ids=null, replayIdx=null) => {
+        let pool = [];
+        if(ids) { pool = DB.data.filter(w => ids.includes(w.id)); } 
+        else { 
+            if(setupApp.selectedDecks.size === 0) return ui.toast("请先选择一个分区！");
+            const all = setupApp.selectedDecks.has('__ALL__'); 
+            pool = all ? DB.data.filter(w => !w.simple) : DB.data.filter(w => setupApp.selectedDecks.has(w.deck) && !w.simple);
+        }
+        if(pool.length === 0) return alert("无词可背（可能都标记为简单了）");
+        let lim = pool.length;
+        if(!ids) { if(setupApp.limit === 'custom') { const v = parseInt(document.getElementById('cust-lim').value); if(v>0) lim = v; } else if(setupApp.limit !== 'all') lim = setupApp.limit; }
+        pool.sort(() => 0.5 - Math.random());
+        if(!ids) pool = pool.slice(0, lim); 
+        sessionApp.queue = pool.map(w => ({ w: w, s: 0, t: 1 }));
+        sessionApp.total = pool.length; sessionApp.mistakes = 0; sessionApp.mode = ids ? 'random' : setupApp.mode; sessionApp.replayIdx = replayIdx; 
+        sessionApp.hist = { date: Date.now(), deck: ids ? "原题重练" : (setupApp.selectedDecks.has('__ALL__')?"全分区": Array.from(setupApp.selectedDecks).join(',')), count: pool.length, err: 0, wrongIds: [], allIds: pool.map(w => w.id) };
+        toggleNav(false); router.push('pg-session'); sessionApp.render();
+    },
+    render: () => {
+        if(sessionApp.queue.length === 0) { sessionApp.finish(); return; }
+        const cur = sessionApp.queue[0];
+        const idx = sessionApp.total - sessionApp.queue.length + 1;
+        document.getElementById('sess-idx').innerText = idx; document.getElementById('sess-total').innerText = sessionApp.total;
+        const pct = (idx/sessionApp.total)*100;
+        document.getElementById('sess-prog').style.width = pct + '%'; document.getElementById('sess-prog-spell').style.width = pct + '%';
+        const cleanW = cur.w.w.replace(/^\d+[\.\s]+/, '').split(/[\(\[<]/)[0].trim(); 
+        if(sessionApp.mode === 'write') {
+            document.getElementById('card-recall').classList.add('hidden'); document.getElementById('card-spell').classList.remove('hidden');
+            document.getElementById('spell-def').innerText = cur.w.d; document.getElementById('spell-inp').value = ''; document.getElementById('spell-msg').innerText = ''; document.getElementById('spell-inp').focus();
+        } else {
+            document.getElementById('card-spell').classList.add('hidden'); document.getElementById('card-recall').classList.remove('hidden');
+            document.getElementById('rec-word').innerText = cleanW;
+        }
+    },
+    answer: (ok) => {
+        const cur = sessionApp.queue[0];
+        if(ok) {
+            cur.s++;
+            if(cur.s >= cur.t) { sessionApp.queue.shift(); sessionApp.detail(cur.w, true, true); }
+            else { sessionApp.queue.push(sessionApp.queue.shift()); sessionApp.detail(cur.w, true, false); }
+        } else sessionApp.err(cur);
+    },
+    checkSpell: (giveup=false) => {
+        const cur = sessionApp.queue[0];
+        const cleanW = cur.w.w.replace(/^\d+[\.\s]+/, '').split(/[\(\[<]/)[0].trim().toLowerCase();
+        const v = document.getElementById('spell-inp').value.trim().toLowerCase();
+        if(!giveup && v === cleanW) {
+            cur.s++;
+            if(cur.s >= cur.t) { sessionApp.queue.shift(); sessionApp.detail(cur.w, true, true); }
+            else { sessionApp.queue.push(sessionApp.queue.shift()); sessionApp.detail(cur.w, true, false); }
+        } else {
+            if(!giveup) { document.getElementById('spell-msg').innerText = "拼写错误"; setTimeout(() => sessionApp.err(cur), 800); }
+            else sessionApp.err(cur);
+        }
+    },
+    err: (item) => {
+        item.t = 3; item.s = 0; sessionApp.mistakes++;
+        DB.markError(item.w.id); sessionApp.hist.wrongIds.push(item.w.id);
+        sessionApp.queue.push(sessionApp.queue.shift());
+        sessionApp.detail(item.w, false, false);
+    },
+    markAsSimple: () => {
+        const cur = sessionApp.queue[0];
+        DB.markSimple(cur.w.id, true);
+        ui.toast("已标记为简单，不再出现");
+        sessionApp.queue.shift();
+        sessionApp.render();
+    },
+    detail: (w, ok, fin, isView=false) => {
+        sessionApp.isViewMode = isView;
+        router.push('pg-detail');
+        const cleanW = w.w.replace(/^\d+[\.\s]+/, '').split(/[\(\[<]/)[0].trim();
+        document.getElementById('det-word').innerText = cleanW;
+        document.getElementById('det-def').innerText = w.d;
+        document.getElementById('det-deck').innerText = w.deck; document.getElementById('det-errs').innerText = w.errs || 0;
+        
+        const exBox = document.getElementById('det-example-box');
+        const exTxt = document.getElementById('det-example');
+        if(w.ex) { exBox.style.display = 'block'; exTxt.innerText = w.ex; } else { exBox.style.display = 'none'; }
+        
+        const tag = document.getElementById('det-tag'); const undo = document.getElementById('btn-undo'); const btnNext = document.getElementById('btn-next');
+        
+        if (isView) {
+            tag.innerText = "查看模式"; tag.className = "badge"; tag.style.background = "#f1f5f9"; tag.style.color = "#64748b";
+            undo.classList.add('hidden');
+            btnNext.innerText = "关闭";
+            btnNext.onclick = () => router.back();
+        } else {
+            if(ok) { tag.innerText = fin ? '已掌握' : '正确'; tag.className = "badge"; tag.style.background = '#dcfce7'; tag.style.color = '#15803d'; undo.classList.remove('hidden'); }
+            else { tag.innerText = '不认识'; tag.className = "badge err"; undo.classList.add('hidden'); }
+            btnNext.innerText = "下一个 (Enter)";
+            btnNext.onclick = () => sessionApp.next();
+        }
+        
+        if('speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(cleanW); u.lang = 'en-US'; window.speechSynthesis.speak(u); }
+    },
+    speakExample: () => { const txt = document.getElementById('det-example').innerText; if(txt && 'speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(txt); u.lang = 'en-US'; window.speechSynthesis.speak(u); } },
+    next: () => { document.getElementById('pg-detail').classList.remove('active'); sessionApp.render(); },
+    undoKnown: () => {
+        const wTxt = document.getElementById('det-word').innerText;
+        const w = DB.data.find(i => i.w.includes(wTxt)); 
+        if(w) { DB.markError(w.id); sessionApp.mistakes++; sessionApp.hist.wrongIds.push(w.id); sessionApp.queue.push({ w: w, s: 0, t: 3 }); document.getElementById('pg-detail').classList.remove('active'); ui.toast("已标记为不认识，稍后重现"); sessionApp.render(); }
+    },
+    quit: () => { if(confirm("退出练习?")) { toggleNav(true); router.goHome(); } },
+    finish: () => {
+        // ⚡ FIX: 强制清理状态，防止循环
+        document.getElementById('pg-detail').classList.remove('active');
+        document.getElementById('pg-session').classList.remove('active');
+        
+        toggleNav(true); router.push('pg-summary'); document.getElementById('sum-total').innerText = sessionApp.total; document.getElementById('sum-err').innerText = sessionApp.mistakes;
+        const score = Math.round(((sessionApp.total - sessionApp.hist.wrongIds.length)/sessionApp.total)*100);
+        sessionApp.hist.score = isNaN(score)?0:score; sessionApp.hist.err = sessionApp.mistakes;
+        if(sessionApp.replayIdx !== null) { DB.updateHistory(sessionApp.replayIdx, sessionApp.hist); } else { DB.recordHistory(sessionApp.hist); }
+    },
+    replay: (i) => { const h = DB.history[i]; if(!h || !h.allIds || h.allIds.length === 0) return alert("此记录无法重练"); if(confirm(`准备原题重练？`)) { sessionApp.start(h.allIds, i); } }
+};
+
+window.onload = () => {
+    DB.init(); homeApp.render(); router.switchTab('tab-home');
+    document.addEventListener('keydown', (e) => {
+        if(document.getElementById('pg-detail').classList.contains('active')) { 
+            if(sessionApp.isViewMode && e.key === 'Enter') { e.preventDefault(); router.back(); }
+            else if(e.key === 'Enter') { e.preventDefault(); sessionApp.next(); } 
+        }
+        else if(document.getElementById('pg-session').classList.contains('active')) {
+            if(!document.getElementById('card-recall').classList.contains('hidden')) {
+                if(e.key === '1') sessionApp.answer(false); if(e.key === '2') sessionApp.answer(true);
+            } else if(e.key === 'Enter') { sessionApp.checkSpell(); }
+        }
+    });
+};
+</script>
+</body>
+</html>
