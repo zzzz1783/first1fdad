@@ -1,6 +1,6 @@
 # 📚 背词大师v0 (VocBuilder)
 
-[👉 点击这里直接在线体验](https://zzzz1783.github.io/first1fdad/)
+[👉 点击这里直接在线体验](https://zzzz1783.github.io/VocBuilder/)
 
 这是一个极简的、基于纯前端（HTML + Vanilla JS + CSS）打造的背单词网页工具。无需安装任何后端或数据库，所有数据均安全保存在浏览器本地。
 
